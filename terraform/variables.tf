@@ -1,29 +1,29 @@
 variable "aws_region" {
-  description = "AWS region to deploy into"
+  description = "AWS region to deploy in"
   type        = string
-  default     = "ap-south-1"
+  default     = "ap-south-1"  # Mumbai — lowest latency for India
 }
 
-variable "project_name" {
-  description = "Name prefix for all resources"
+variable "telegram_token" {
+  description = "Telegram bot token from @BotFather"
   type        = string
-  default     = "shreyo-agent"
+  sensitive   = true
 }
 
-variable "lambda_zip_path" {
-  description = "Path to the built Lambda deployment zip"
+variable "allowed_user_id" {
+  description = "Your Telegram numeric user ID (from @userinfobot)"
   type        = string
-  default     = "../build/lambda.zip"
+  sensitive   = true
 }
 
-variable "lambda_memory_mb" {
-  description = "Memory allocated to the Lambda function"
-  type        = number
-  default     = 512
+variable "groq_api_key" {
+  description = "Groq API key from console.groq.com"
+  type        = string
+  sensitive   = true
 }
 
-variable "lambda_timeout_s" {
-  description = "Timeout for the Lambda function in seconds"
-  type        = number
-  default     = 30
+variable "gemini_api_key" {
+  description = "Google Gemini API key from aistudio.google.com"
+  type        = string
+  sensitive   = true
 }

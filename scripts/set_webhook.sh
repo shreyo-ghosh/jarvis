@@ -1,32 +1,38 @@
 #!/usr/bin/env bash
+# set_webhook.sh — register or update the Telegram webhook
 set -euo pipefail
-export PATH="/c/ProgramData/chocolatey/bin:/c/Program Files/Amazon/AWSCLIV2:$PATH"
-cd "$(dirname "$0")/.."
-TEMP_ENV=$(mktemp)
-trap 'rm -f "$TEMP_ENV"' EXIT
-if command -v python3 >/dev/null 2>&1; then
-  PYTHON_BIN=python3
-elif command -v python >/dev/null 2>&1; then
-  PYTHON_BIN=python
-else
-  echo "Python is required to normalize the local .env file."
-  exit 127
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if [[ ! -f .env ]]; then echo "❌ .env not found"; exit 1; fi
+set -a; source .env; set +a
+
+# Get webhook URL from Terraform output
+WEBHOOK_URL=$(cd terraform && terraform output -raw webhook_url 2>/dev/null || echo "")
+
+if [[ -z "$WEBHOOK_URL" ]]; then
+  echo "❌ Could not get webhook URL from Terraform. Run terraform apply first."
+  exit 1
 fi
-"$PYTHON_BIN" - "$TEMP_ENV" <<'PY'
-from pathlib import Path
-import sys
-src = Path('.env')
-tmp = Path(sys.argv[1])
-text = src.read_text(encoding='utf-8-sig')
-tmp.write_text(text.replace('\r\n', '\n').replace('\r', '\n'), encoding='utf-8')
-PY
-set -a
-source "$TEMP_ENV"
-set +a
-WEBHOOK_URL=$(cd terraform && terraform output -raw webhook_url)
-echo "Registering webhook: $WEBHOOK_URL"
-curl -s --data "url=${WEBHOOK_URL}" \
-  "https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook"
+
+echo "📡 Registering webhook: $WEBHOOK_URL"
+
+RESPONSE=$(curl -s \
+  "https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook" \
+  -d "url=${WEBHOOK_URL}" \
+  -d "allowed_updates=[\"message\",\"callback_query\"]")
+
+echo "Response: $RESPONSE"
+
+if echo "$RESPONSE" | grep -q '"ok":true'; then
+  echo "✅ Webhook set successfully"
+else
+  echo "❌ Failed to set webhook"
+  exit 1
+fi
+
+# Verify
 echo ""
-echo "Done. Verify with:"
-echo "curl https://api.telegram.org/bot${TELEGRAM_TOKEN}/getWebhookInfo"
+echo "Verifying..."
+curl -s "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getWebhookInfo" | python3 -m json.tool

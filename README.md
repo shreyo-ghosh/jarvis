@@ -1,186 +1,168 @@
-# Shreyo Agent — AWS Edition
+# Jarvis — Shreyo's 4-Agent Business Command System
+**AWS Lambda + DynamoDB + API Gateway · Groq Llama 3.3 70B + Gemini Flash · ~₹0/day**
 
-A Telegram bot "AI agent" for business automation (web search, LinkedIn posts, revenue logging, task tracking, Gmail + Calendar), running on **AWS Lambda + API Gateway**, using **Groq** (Llama 3.3 70B) and **Google Gemini** as free-tier AI backends instead of the Anthropic API. Infrastructure is defined in **Terraform** so the whole thing deploys with one command from VS Code.
+```
+YOU (Telegram)
+     │
+     ▼
+🧠  ORCHESTRATOR  ←── daily brief, calendar, tasks, routing
+     │
+     ├─────────────────────┬──────────────────────┐
+     ▼                     ▼                      ▼
+📈 MARKET AGENT     📡 TECH AGENT         💰 FINANCE AGENT
+Nifty / Sensex      LaunchLayer content   @launchlayerfinance IG
+Stock analysis      @launchlayer IG       MO investor emails
+MF NAV / data       LinkedIn posts        WhatsApp broadcasts
+Watchlists          "Automation Edge"     AUM growth campaigns
+Macro news          Cold outreach email   Lead strategies
+```
+
+---
+
+## Agent Capabilities
+
+| Say this | Agent | Output |
+|---|---|---|
+| `What should I focus on today?` | Orchestrator | Prioritised daily brief from calendar + tasks + market |
+| `What's Nifty doing today?` | Market | Live index data via Gemini search |
+| `Add RELIANCE to my watchlist` | Market | Saved to DynamoDB, shows current data |
+| `Write this week's LaunchLayer newsletter` | Tech | Full "Automation Edge" newsletter draft |
+| `LinkedIn post about AI for CA firms` | Tech | Ready-to-post, 200 words, hashtags |
+| `Instagram post for @launchlayer about chatbots` | Tech | Caption + Canva visual brief |
+| `Post on @launchlayerfinance about SIP vs FD` | Finance | Caption + visual + MF disclaimer |
+| `WhatsApp messages for my MO leads` | Finance | 2 versions (beginner + FD holder) |
+| `Draft MO outreach email for salaried leads` | Finance | Full email draft via Gmail |
+| `Plan a campaign to grow AUM to ₹2L` | Finance | Week-by-week campaign plan |
+| `Log ₹8000 from LaunchLayer client ABC` | Orchestrator | Saved to DynamoDB |
+| `Show revenue summary` | Orchestrator | Totals by source, by month |
+| `What's on my calendar this week?` | Orchestrator | Google Calendar pull |
+| `Add meeting with Rahul tomorrow 3pm` | Orchestrator | Event created in Calendar |
+
+---
 
 ## Architecture
 
 ```
-Telegram → API Gateway (HTTPS webhook) → Lambda (bot.py) → Groq / Gemini
-                                              │
-                                              ├── DynamoDB (revenue + task log)
-                                              ├── SSM Parameter Store (secrets)
-                                              └── Gmail / Calendar APIs (optional)
+Telegram → API Gateway (HTTPS) → Lambda (bot.py)
+                                       │
+                          ┌────────────┼────────────┐
+                          ▼            ▼             ▼
+                    agents/        tools/        AWS Services
+                orchestrator.py   search.py     DynamoDB
+                market_agent.py   gmail.py      SSM (secrets)
+                tech_agent.py     calendar.py   CloudWatch
+                finance_agent.py  instagram.py
+                                  tracker.py
+                                  dynamo.py
 ```
 
-| Piece | AWS Service | Cost |
+| Service | AWS Cost | Notes |
 |---|---|---|
-| Compute | Lambda (Python 3.12) | Free tier: 1M requests + 400k GB-s/month |
-| Ingress | API Gateway HTTP API | Free tier: 1M requests/month |
-| Storage | DynamoDB (on-demand) | Pennies at this scale |
-| Secrets | SSM Parameter Store (Standard) | Free |
-| AI brain | Groq (Llama 3.3 70B) | Free tier: 14,400 req/day |
-| AI backup | Google Gemini 1.5 Flash | Free tier: 1,500 req/day |
-
-**Total recurring cost: ~₹0–5/day.**
+| Lambda | Free tier: 1M req/month | Runs per-message, not always-on |
+| API Gateway | Free tier: 1M req/month | HTTPS webhook endpoint |
+| DynamoDB | ~₹0 at this scale | On-demand billing |
+| SSM | Free (Standard tier) | Stores all secrets |
+| CloudWatch Logs | Free tier | 7-day retention |
+| **Groq AI** | Free: 14,400 req/day | Llama 3.3 70B — the AI brain |
+| **Gemini** | Free: 1,500 req/day | Web search grounding |
+| **Total** | **~₹0–5/day** | |
 
 ---
 
 ## Prerequisites
 
-Install these once on your machine:
+Install once on your machine:
+- [AWS CLI](https://aws.amazon.com/cli/) → `aws configure` (region: `ap-south-1`)
+- [Terraform >= 1.6](https://developer.hashicorp.com/terraform/downloads)
+- [Docker](https://www.docker.com/) (for Lambda build)
+- [Python 3.12](https://www.python.org/downloads/)
 
-1. [AWS CLI](https://aws.amazon.com/cli/) — `aws configure` with your access key/secret and default region (e.g. `ap-south-1`)
-2. [Terraform](https://developer.hashicorp.com/terraform/downloads) (>= 1.6)
-3. [Python 3.12](https://www.python.org/downloads/)
-4. [Docker](https://www.docker.com/) (used to build the Lambda deployment package with the correct Linux binaries)
-5. [VS Code](https://code.visualstudio.com/) with the AWS Toolkit + Terraform extensions (optional but nice)
+Get these keys (all free):
 
-Get these keys before you start:
-
-| Key | Where to get it |
+| Key | Where |
 |---|---|
-| `TELEGRAM_TOKEN` | Message `@BotFather` on Telegram → `/newbot` |
-| `ALLOWED_USER_ID` | Message `@userinfobot` on Telegram |
-| `GROQ_API_KEY` | https://console.groq.com/keys (free, no card) |
-| `GEMINI_API_KEY` | https://aistudio.google.com/apikey (free, no card) |
+| `TELEGRAM_TOKEN` | @BotFather → `/newbot` |
+| `ALLOWED_USER_ID` | @userinfobot on Telegram |
+| `GROQ_API_KEY` | console.groq.com (no card) |
+| `GEMINI_API_KEY` | aistudio.google.com/apikey |
 
 ---
 
-## Quick Start (VS Code Terminal)
+## Deploy
 
 ```bash
-# 1. Clone / open this repo in VS Code
-git clone <your-repo-url> shreyo-agent-aws
-cd shreyo-agent-aws
+# 1. Clone your repo
+git clone https://github.com/shreyo-ghosh/jarvis.git
+cd jarvis
 
-# 2. Copy env template and fill in your keys
+# 2. Fill in secrets
 cp .env.example .env
-# edit .env with your TELEGRAM_TOKEN, GROQ_API_KEY, GEMINI_API_KEY, ALLOWED_USER_ID
+nano .env   # paste your keys
 
-# 3. One-command deploy (builds Lambda package, applies Terraform, sets Telegram webhook)
+# 3. One command — builds Lambda zip, applies Terraform, registers webhook
+chmod +x scripts/*.sh
 ./scripts/deploy.sh
 ```
 
-That's it. The script will:
-
-1. Build a Lambda-compatible dependency layer using Docker
-2. Push your secrets into SSM Parameter Store
-3. Run `terraform init && terraform apply` to create Lambda, API Gateway, DynamoDB, IAM roles
-4. Grab the API Gateway URL from Terraform output and call Telegram's `setWebhook` automatically
-
-Message your bot on Telegram → `/start` → you're live.
+Done. Message your bot `/start`.
 
 ---
 
-## Repo Structure
-
-```
-shreyo-agent-aws/
-├── terraform/
-│   ├── main.tf          # Lambda, API Gateway, DynamoDB, IAM, SSM
-│   ├── variables.tf
-│   └── outputs.tf
-├── src/
-│   ├── bot.py            # Lambda handler — parses Telegram webhook, routes to agent
-│   ├── agent.py           # Groq (primary) + Gemini (fallback) routing + tool-calling loop
-│   └── tools/
-│       ├── search.py      # DuckDuckGo web search (free, no key)
-│       ├── gmail.py        # Gmail draft + send (optional, Step 5)
-│       ├── calendar_tool.py # Google Calendar read/write (optional, Step 5)
-│       ├── linkedin.py      # LinkedIn post generator
-│       └── tracker.py       # Revenue + task logging via DynamoDB
-├── scripts/
-│   ├── deploy.sh           # One-shot build + deploy + webhook registration
-│   ├── build_lambda.sh     # Builds deployment zip with Docker (Linux-compatible deps)
-│   ├── set_webhook.sh      # Registers/updates Telegram webhook URL
-│   └── setup_google_auth.py # Optional — run locally once for Gmail/Calendar OAuth
-├── requirements.txt
-├── .env.example
-├── .gitignore
-└── README.md
-```
-
----
-
-## Step-by-Step Manual Walkthrough
-
-If you'd rather run each step yourself instead of `deploy.sh`:
-
-### 1. Configure AWS CLI
-```bash
-aws configure
-```
-
-### 2. Fill in secrets
-```bash
-cp .env.example .env
-```
-
-### 3. Push secrets to SSM
-```bash
-./scripts/push_secrets.sh
-```
-
-### 4. Build the Lambda package
-```bash
-./scripts/build_lambda.sh
-```
-
-### 5. Deploy infrastructure
-```bash
-cd terraform
-terraform init
-terraform apply
-```
-
-### 6. Register the Telegram webhook
-```bash
-cd ..
-./scripts/set_webhook.sh
-```
-
-### 7. Test it
-Open Telegram → find your bot → send `/start`, then try:
-- `search for AI automation trends India 2026`
-- `write a LinkedIn post about SIPs for millennials`
-- `log revenue: ₹8000 from LaunchLayer client today`
-- `show my revenue summary`
-
----
-
-## Step 5 (Optional) — Gmail + Calendar
-
-1. Go to https://console.cloud.google.com → New Project → "ShreyoAgent"
-2. Enable **Gmail API** and **Google Calendar API**
-3. APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID → Application type: Desktop app → download as `credentials.json` into the repo root
-4. Configure the OAuth consent screen (External, add your Gmail as a test user, add Gmail + Calendar scopes)
-5. Run locally once:
-   ```bash
-   pip install google-auth-oauthlib google-api-python-client
-   python scripts/setup_google_auth.py
-   ```
-6. Push both files to SSM and redeploy:
-   ```bash
-   ./scripts/push_google_secrets.sh
-   cd terraform && terraform apply
-   ```
-
----
-
-## Updating the Bot
+## Update After Code Changes
 
 ```bash
 ./scripts/build_lambda.sh
-cd terraform && terraform apply
+cd terraform && terraform apply -auto-approve \
+  -var="telegram_token=$TELEGRAM_TOKEN" \
+  -var="allowed_user_id=$ALLOWED_USER_ID" \
+  -var="groq_api_key=$GROQ_API_KEY" \
+  -var="gemini_api_key=$GEMINI_API_KEY"
 ```
+
+Or just re-run `./scripts/deploy.sh` — it's idempotent.
 
 ---
 
-## Tearing Everything Down
+## Step 5 (Optional) — Gmail + Google Calendar
 
 ```bash
-cd terraform
-terraform destroy
+pip install google-auth-oauthlib
+python scripts/setup_google_auth.py
+```
+
+Follow the browser flow → logs in with your Google account → appends `GMAIL_TOKEN_JSON` to `.env`.
+Re-run `./scripts/deploy.sh` — it pushes the token to SSM automatically.
+
+Google Cloud setup (one-time):
+1. console.cloud.google.com → New Project → "JarvisAgent"
+2. Enable: Gmail API + Google Calendar API
+3. OAuth consent screen → External → add your Gmail as test user
+4. Credentials → OAuth 2.0 Client ID → Desktop → download as `credentials.json`
+
+---
+
+## Instagram Auto-Posting (Optional)
+
+Both Instagram accounts must be Professional and linked to Facebook Pages.
+1. Create Facebook App at developers.facebook.com
+2. Get Instagram Graph API long-lived token
+3. Find your Instagram Business Account IDs
+4. Add to `.env`:
+   ```
+   INSTAGRAM_ACCESS_TOKEN=...
+   LAUNCHLAYER_IG_ACCOUNT_ID=...
+   LAUNCHLAYER_FINANCE_IG_ACCOUNT_ID=...
+   ```
+5. Re-run `./scripts/deploy.sh`
+
+Until configured, the bot generates captions + Canva briefs for manual posting.
+
+---
+
+## Teardown
+
+```bash
+cd terraform && terraform destroy
 ```
 
 ---
@@ -189,8 +171,44 @@ terraform destroy
 
 | Symptom | Fix |
 |---|---|
-| Bot doesn't respond | Check CloudWatch Logs for the Lambda function (`/aws/lambda/shreyo-agent-bot`) |
-| `Unauthorized` in Telegram | Your `ALLOWED_USER_ID` doesn't match — confirm via `@userinfobot` |
-| Webhook not receiving updates | Re-run `./scripts/set_webhook.sh`; verify with `curl https://api.telegram.org/bot<TOKEN>/getWebhookInfo` |
-| Terraform apply fails on IAM | Ensure your AWS user/role has `IAMFullAccess` or equivalent permissions |
-| Gmail/Calendar errors | Re-run `scripts/setup_google_auth.py` — token likely expired, refresh token missing |
+| Bot silent | Check CloudWatch: `/aws/lambda/shreyo-jarvis-bot` |
+| "Unauthorized" | Wrong ALLOWED_USER_ID — check @userinfobot |
+| Webhook not firing | Re-run `./scripts/set_webhook.sh` |
+| Terraform IAM error | Ensure AWS user has `IAMFullAccess` |
+| Gmail/Calendar errors | Re-run `scripts/setup_google_auth.py` |
+| Lambda timeout | Agent taking >60s — check Groq quota |
+
+---
+
+## File Structure
+
+```
+jarvis/
+├── src/
+│   ├── bot.py                     # Lambda handler — Telegram webhook entry point
+│   ├── agents/
+│   │   ├── orchestrator.py        # 🧠 Routes + daily briefs + tracker/calendar
+│   │   ├── market_agent.py        # 📈 Indian market intelligence
+│   │   ├── tech_agent.py          # 📡 LaunchLayer content + outreach
+│   │   └── finance_agent.py       # 💰 MO outreach + @launchlayerfinance
+│   └── tools/
+│       ├── search.py              # Gemini search + DDG fallback
+│       ├── gmail.py               # Gmail draft/send/inbox (SSM-backed)
+│       ├── calendar_tool.py       # Google Calendar (SSM-backed)
+│       ├── instagram.py           # IG captions + Graph API auto-post
+│       ├── tracker.py             # Revenue + task tracker (DynamoDB)
+│       └── dynamo.py              # DynamoDB key-value store
+├── terraform/
+│   ├── main.tf                    # Lambda, API GW, DynamoDB, IAM, SSM, CloudWatch
+│   ├── variables.tf
+│   └── outputs.tf
+├── scripts/
+│   ├── deploy.sh                  # One-shot: build + terraform + webhook
+│   ├── build_lambda.sh            # Docker build for Linux-compatible deps
+│   ├── set_webhook.sh             # Register/update Telegram webhook
+│   └── setup_google_auth.py      # One-time Google OAuth flow
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── README.md
+```

@@ -1,21 +1,92 @@
 #!/usr/bin/env bash
+# deploy.sh — one command to build + deploy + register webhook
+# Usage: ./scripts/deploy.sh
 set -euo pipefail
-export PATH="/c/ProgramData/chocolatey/bin:/c/Program Files/Amazon/AWSCLIV2:$PATH"
-cd "$(dirname "$0")/.."
-if [ ! -f .env ]; then
-  echo ".env not found. Run: cp .env.example .env   then fill in your keys."
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+echo ""
+echo "🤖 Jarvis 4-Agent Deploy"
+echo "========================"
+echo ""
+
+# ── 1. Load .env ──────────────────────────────────────────────────────────────
+if [[ ! -f .env ]]; then
+  echo "❌ .env not found. Copy .env.example and fill in your keys:"
+  echo "   cp .env.example .env && nano .env"
   exit 1
 fi
-echo "Step 1/4 — Building Lambda deployment package..."
-./scripts/build_lambda.sh
-echo "Step 2/4 — Pushing secrets to SSM..."
-./scripts/push_secrets.sh
-echo "Step 3/4 — Deploying infrastructure with Terraform..."
-cd terraform
-terraform init -input=false
-terraform apply -auto-approve
-cd ..
-echo "Step 4/4 — Registering Telegram webhook..."
-./scripts/set_webhook.sh
+set -a; source .env; set +a
+echo "✅ Loaded .env"
+
+# ── 2. Build Lambda package ───────────────────────────────────────────────────
 echo ""
-echo "Deployment complete. Message your bot on Telegram to test it."
+echo "📦 Building Lambda package..."
+bash scripts/build_lambda.sh
+echo "✅ lambda_package.zip ready"
+
+# ── 3. Terraform apply ────────────────────────────────────────────────────────
+echo ""
+echo "🏗️  Applying Terraform..."
+cd terraform
+terraform init -input=false -upgrade 2>&1 | tail -5
+terraform apply -auto-approve \
+  -var="telegram_token=${TELEGRAM_TOKEN}" \
+  -var="allowed_user_id=${ALLOWED_USER_ID}" \
+  -var="groq_api_key=${GROQ_API_KEY}" \
+  -var="gemini_api_key=${GEMINI_API_KEY}" \
+  -var="aws_region=${AWS_REGION:-ap-south-1}"
+
+WEBHOOK_URL=$(terraform output -raw webhook_url)
+cd ..
+echo "✅ Infrastructure deployed"
+echo "   Webhook URL: $WEBHOOK_URL"
+
+# ── 4. Push optional Google secrets to SSM ───────────────────────────────────
+if [[ -n "${GMAIL_TOKEN_JSON:-}" ]]; then
+  echo ""
+  echo "📧 Pushing Gmail token to SSM..."
+  aws ssm put-parameter \
+    --name "/shreyo-agent/GMAIL_TOKEN_JSON" \
+    --value "$GMAIL_TOKEN_JSON" \
+    --type SecureString \
+    --overwrite \
+    --region "${AWS_REGION:-ap-south-1}"
+  echo "✅ Gmail token stored"
+fi
+
+if [[ -n "${INSTAGRAM_ACCESS_TOKEN:-}" ]]; then
+  echo ""
+  echo "📸 Pushing Instagram token to SSM..."
+  aws ssm put-parameter \
+    --name "/shreyo-agent/INSTAGRAM_ACCESS_TOKEN" \
+    --value "$INSTAGRAM_ACCESS_TOKEN" \
+    --type SecureString \
+    --overwrite \
+    --region "${AWS_REGION:-ap-south-1}"
+  echo "✅ Instagram token stored"
+fi
+
+# ── 5. Register Telegram webhook ──────────────────────────────────────────────
+echo ""
+echo "📡 Registering Telegram webhook..."
+RESPONSE=$(curl -s "https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook" \
+  -d "url=${WEBHOOK_URL}" \
+  -d "allowed_updates=[\"message\",\"callback_query\"]")
+
+if echo "$RESPONSE" | grep -q '"ok":true'; then
+  echo "✅ Webhook registered: $WEBHOOK_URL"
+else
+  echo "⚠️  Webhook registration returned: $RESPONSE"
+  echo "   Run manually: bash scripts/set_webhook.sh"
+fi
+
+echo ""
+echo "🚀 Jarvis is live!"
+echo "   Open Telegram → find your bot → send /start"
+echo ""
+echo "   CloudWatch logs:"
+LOGGROUP=$(cd terraform && terraform output -raw log_group)
+echo "   https://console.aws.amazon.com/cloudwatch/home?region=${AWS_REGION:-ap-south-1}#logsV2:log-groups/log-group/${LOGGROUP/\//\$252F}"
+echo ""
