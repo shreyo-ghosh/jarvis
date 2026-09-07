@@ -1,0 +1,14 @@
+.env
+out.json
+build/
+*.zip
+__pycache__/
+*.pyc
+.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfvars
+credentials.json
+google_token.json
+.DS_Store
