@@ -1,38 +1,73 @@
 #!/usr/bin/env bash
-# build_lambda.sh — builds a Lambda-compatible zip using Docker
-# Ensures native binaries (aiohttp, cryptography etc) compile for Linux x86_64
+# build_lambda.sh — builds a Lambda-compatible zip from the src tree.
+# Lambda expects bot.py and its imports at the archive root.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-echo "🐳 Building Lambda package with Docker (linux/x86_64)..."
+BUILD_DIR="$ROOT/.lambda_build"
+rm -rf "$BUILD_DIR" "$ROOT/lambda_package.zip" "$ROOT/lambda_deps"
+mkdir -p "$BUILD_DIR"
 
-# Use AWS Lambda Python 3.12 base image for correct ABI
-docker run --rm --platform linux/x86_64 \
-  -v "$ROOT:/workspace" \
-  -w /workspace \
-  public.ecr.aws/lambda/python:3.12 \
-  bash -c "
-    pip install -r requirements.txt -t /workspace/lambda_deps/ --quiet
-    echo '✅ Dependencies installed'
-  "
+if command -v docker >/dev/null 2>&1; then
+  echo "🐳 Building Lambda package with Docker (linux/x86_64)..."
+  docker run --rm --platform linux/x86_64 \
+    -v "$ROOT:/workspace" \
+    -w /workspace \
+    --entrypoint /bin/bash \
+    public.ecr.aws/lambda/python:3.12 \
+    -c "
+      set -euo pipefail
+      python3 -m pip install -r /workspace/requirements.txt -t /workspace/lambda_deps --quiet
+      mkdir -p /workspace/.lambda_build
+      cp -R /workspace/src/. /workspace/.lambda_build/
+      cp -R /workspace/lambda_deps/. /workspace/.lambda_build/
+      echo '✅ Dependencies installed'
+    "
+else
+  echo "⚠️ Docker not found; building package locally from source tree..."
+  python3 -m pip install -r requirements.txt -t "$BUILD_DIR" --quiet || true
+fi
 
-echo "📁 Assembling zip..."
-rm -f lambda_package.zip
+if [[ -d "$ROOT/src" ]]; then
+  cp -R "$ROOT/src/." "$BUILD_DIR/"
+fi
 
-# Add src/ files (our code)
-cd src
-zip -r ../lambda_package.zip . -x "__pycache__/*" "*.pyc" "tests/*" 2>/dev/null
-cd ..
+if [[ -d "$ROOT/lambda_deps" ]]; then
+  cp -R "$ROOT/lambda_deps/." "$BUILD_DIR/" 2>/dev/null || true
+fi
 
-# Add dependencies
-cd lambda_deps
-zip -r ../lambda_package.zip . -x "__pycache__/*" "*.pyc" "*.dist-info/*" 2>/dev/null
-cd ..
+find "$BUILD_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} + || true
 
-# Cleanup
-rm -rf lambda_deps/
+python3 - "$BUILD_DIR" "$ROOT/lambda_package.zip" <<'PY'
+import os
+import sys
+import zipfile
 
-SIZE=$(du -sh lambda_package.zip | cut -f1)
+src_dir = sys.argv[1]
+zip_path = sys.argv[2]
+
+with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+    for base, dirs, files in os.walk(src_dir):
+        dirs[:] = [d for d in dirs if d != '__pycache__']
+        for file in files:
+            if file.endswith('.pyc'):
+                continue
+            full_path = os.path.join(base, file)
+            arcname = os.path.relpath(full_path, src_dir)
+            zf.write(full_path, arcname)
+
+    names = set(zf.namelist())
+    missing = []
+    if 'bot.py' not in names and not any(n.endswith('/bot.py') for n in names):
+        missing.append('bot.py')
+    if not any('pydantic_core' in n and ('__init__.py' in n or '_pydantic_core' in n) for n in names):
+        missing.append('pydantic_core dependency')
+    if missing:
+        raise SystemExit(f'Missing required Lambda package entries: {missing}')
+PY
+
+rm -rf "$BUILD_DIR" "$ROOT/lambda_deps"
+SIZE=$(du -sh "$ROOT/lambda_package.zip" | cut -f1)
 echo "✅ lambda_package.zip ready — $SIZE"

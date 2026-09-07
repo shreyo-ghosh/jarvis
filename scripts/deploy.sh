@@ -11,6 +11,29 @@ echo "🤖 Jarvis 4-Agent Deploy"
 echo "========================"
 echo ""
 
+# ── 0. Ensure local toolchain is on PATH for Git Bash / WSL-ish shells ──────
+if ! command -v terraform >/dev/null 2>&1; then
+  for candidate in \
+    "/c/ProgramData/chocolatey/bin" \
+    "/c/Program Files/Amazon/AWSCLIV2" \
+    "/c/Program Files/Terraform" \
+    "/c/Program Files/HashiCorp/Terraform"; do
+    if [[ -d "$candidate" ]]; then
+      export PATH="$candidate:${PATH:-}"
+    fi
+  done
+fi
+if ! command -v aws >/dev/null 2>&1; then
+  export PATH="/c/Program Files/Amazon/AWSCLIV2:${PATH:-}"
+fi
+
+if command -v terraform >/dev/null 2>&1; then
+  echo "✅ terraform found at: $(command -v terraform)"
+fi
+if command -v aws >/dev/null 2>&1; then
+  echo "✅ aws found at: $(command -v aws)"
+fi
+
 # ── 1. Load .env ──────────────────────────────────────────────────────────────
 if [[ ! -f .env ]]; then
   echo "❌ .env not found. Copy .env.example and fill in your keys:"
@@ -23,7 +46,17 @@ echo "✅ Loaded .env"
 # ── 2. Build Lambda package ───────────────────────────────────────────────────
 echo ""
 echo "📦 Building Lambda package..."
-bash scripts/build_lambda.sh
+if command -v docker >/dev/null 2>&1; then
+  bash scripts/build_lambda.sh
+else
+  if [[ -f lambda_package.zip ]]; then
+    echo "⚠️ Docker unavailable; using existing lambda_package.zip"
+  else
+    echo "❌ No lambda_package.zip found and Docker is not installed."
+    echo "   Install Docker or build the ZIP on a Docker-enabled machine."
+    exit 1
+  fi
+fi
 echo "✅ lambda_package.zip ready"
 
 # ── 3. Terraform apply ────────────────────────────────────────────────────────

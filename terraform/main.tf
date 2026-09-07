@@ -102,13 +102,14 @@ resource "aws_iam_role_policy_attachment" "basic_execution" {
 
 # ── Lambda Function ───────────────────────────────────────────────────────────
 resource "aws_lambda_function" "jarvis_bot" {
-  function_name = "shreyo-jarvis-bot"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "bot.lambda_handler"
-  runtime       = "python3.12"
-  filename      = "../lambda_package.zip"
-  timeout       = 60   # 60s — agent loops can take time
-  memory_size   = 512
+  function_name    = "shreyo-jarvis-bot"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "bot.lambda_handler"
+  runtime          = "python3.12"
+  filename         = "../lambda_package.zip"
+  source_code_hash = filebase64sha256("../lambda_package.zip")
+  timeout          = 60   # 60s — agent loops can take time
+  memory_size      = 512
 
   environment {
     variables = {

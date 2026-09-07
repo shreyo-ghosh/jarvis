@@ -18,12 +18,6 @@ from agents.orchestrator import Orchestrator
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-TELEGRAM_TOKEN = _get_secret("TELEGRAM_TOKEN")
-ALLOWED_USER_ID = _get_secret("ALLOWED_USER_ID", required=False)
-
-# Reuse orchestrator across warm Lambda invocations
-_orchestrator = None
-
 
 def _get_secret(name: str, required: bool = True) -> str:
     """Pull secret from SSM Parameter Store (set by deploy.sh)."""
@@ -38,6 +32,19 @@ def _get_secret(name: str, required: bool = True) -> str:
         if required:
             raise RuntimeError(f"Cannot load secret {name}: {e}")
         return ""
+
+
+def _load_runtime_secrets() -> tuple[str, str]:
+    """Load runtime secrets defensively so import-time failures are easier to debug."""
+    telegram_token = _get_secret("TELEGRAM_TOKEN")
+    allowed_user_id = _get_secret("ALLOWED_USER_ID", required=False)
+    return telegram_token, allowed_user_id
+
+
+TELEGRAM_TOKEN, ALLOWED_USER_ID = _load_runtime_secrets()
+
+# Reuse orchestrator across warm Lambda invocations
+_orchestrator = None
 
 
 def get_orchestrator() -> Orchestrator:
