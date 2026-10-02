@@ -483,6 +483,9 @@ const bootTimer = setInterval(() => {
     boot.classList.add("gone");
     setState("", IDLE);
     addMsg("jarvis", "At your service, sir.");
+    if (!isLocalHost() && !cfg.token) {
+      addMsg("jarvis", "The house is live. Open Preferences and paste the desk token from your local .env — it stays in this browser.");
+    }
     speak("At your service, sir.");
   }
 }, 480);

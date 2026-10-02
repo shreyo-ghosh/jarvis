@@ -46,17 +46,7 @@ echo "✅ Loaded .env"
 # ── 2. Build Lambda package ───────────────────────────────────────────────────
 echo ""
 echo "📦 Building Lambda package..."
-if command -v docker >/dev/null 2>&1; then
-  bash scripts/build_lambda.sh
-else
-  if [[ -f lambda_package.zip ]]; then
-    echo "⚠️ Docker unavailable; using existing lambda_package.zip"
-  else
-    echo "❌ No lambda_package.zip found and Docker is not installed."
-    echo "   Install Docker or build the ZIP on a Docker-enabled machine."
-    exit 1
-  fi
-fi
+bash scripts/build_lambda.sh
 echo "✅ lambda_package.zip ready"
 
 # ── 3. Terraform apply ────────────────────────────────────────────────────────
@@ -87,6 +77,39 @@ if [[ -n "${GMAIL_TOKEN_JSON:-}" ]]; then
     --overwrite \
     --region "${AWS_REGION:-ap-south-1}"
   echo "✅ Gmail token stored"
+fi
+
+if [[ -n "${DESK_TOKEN:-}" ]]; then
+  echo ""
+  echo "🪪 Pushing desk token to SSM..."
+  aws ssm put-parameter \
+    --name "/shreyo-agent/DESK_TOKEN" \
+    --value "$DESK_TOKEN" \
+    --type SecureString \
+    --overwrite \
+    --region "${AWS_REGION:-ap-south-1}" >/dev/null
+  echo "✅ Desk token stored"
+fi
+
+if [[ -n "${PUBLORA_API_KEY:-}" ]]; then
+  echo ""
+  echo "📤 Pushing Publora key to SSM..."
+  aws ssm put-parameter \
+    --name "/shreyo-agent/PUBLORA_API_KEY" \
+    --value "$PUBLORA_API_KEY" \
+    --type SecureString \
+    --overwrite \
+    --region "${AWS_REGION:-ap-south-1}"
+  echo "✅ Publora key stored"
+fi
+
+if [[ -n "${LINKEDIN_PLATFORM_ID:-}" ]]; then
+  aws ssm put-parameter \
+    --name "/shreyo-agent/LINKEDIN_PLATFORM_ID" \
+    --value "$LINKEDIN_PLATFORM_ID" \
+    --type SecureString \
+    --overwrite \
+    --region "${AWS_REGION:-ap-south-1}"
 fi
 
 if [[ -n "${INSTAGRAM_ACCESS_TOKEN:-}" ]]; then
