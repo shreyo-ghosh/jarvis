@@ -10,6 +10,7 @@ BUILD_DIR="$ROOT/.lambda_build"
 rm -rf "$BUILD_DIR" "$ROOT/lambda_package.zip" "$ROOT/lambda_deps"
 mkdir -p "$BUILD_DIR"
 
+DOCKER_BUILT=0
 if command -v docker >/dev/null 2>&1; then
   echo "🐳 Building Lambda package with Docker (linux/x86_64)..."
   docker run --rm --platform linux/x86_64 \
@@ -23,19 +24,29 @@ if command -v docker >/dev/null 2>&1; then
       mkdir -p /workspace/.lambda_build
       cp -R /workspace/src/. /workspace/.lambda_build/
       cp -R /workspace/lambda_deps/. /workspace/.lambda_build/
+      chmod -R a+rwX /workspace/.lambda_build /workspace/lambda_deps
       echo '✅ Dependencies installed'
     "
+  DOCKER_BUILT=1
 else
-  echo "⚠️ Docker not found; building package locally from source tree..."
-  python3 -m pip install -r requirements.txt -t "$BUILD_DIR" --quiet || true
+  echo "⚠️ Docker not found; installing manylinux x86_64 wheels for Lambda..."
+  python3 -m pip install \
+    --platform manylinux2014_x86_64 \
+    --implementation cp \
+    --python-version 3.12 \
+    --only-binary=:all: \
+    -r requirements.txt \
+    -t "$BUILD_DIR" \
+    --quiet || python3 -m pip install -r requirements.txt -t "$BUILD_DIR" --quiet || true
 fi
 
-if [[ -d "$ROOT/src" ]]; then
-  cp -R "$ROOT/src/." "$BUILD_DIR/"
-fi
-
-if [[ -d "$ROOT/lambda_deps" ]]; then
-  cp -R "$ROOT/lambda_deps/." "$BUILD_DIR/" 2>/dev/null || true
+if [[ "$DOCKER_BUILT" != 1 ]]; then
+  if [[ -d "$ROOT/src" ]]; then
+    cp -R "$ROOT/src/." "$BUILD_DIR/"
+  fi
+  if [[ -d "$ROOT/lambda_deps" ]]; then
+    cp -R "$ROOT/lambda_deps/." "$BUILD_DIR/" 2>/dev/null || true
+  fi
 fi
 
 find "$BUILD_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} + || true
