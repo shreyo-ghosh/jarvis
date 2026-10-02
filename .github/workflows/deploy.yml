@@ -23,11 +23,15 @@ jobs:
         env:
           KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
           SECRET: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          ALLOW: ${{ secrets.ALLOW_TF_APPLY }}
         run: |
           if [ -z "$KEY" ] || [ -z "$SECRET" ]; then
             echo "present=no" >> "$GITHUB_OUTPUT"
-            echo "Skipping Lambda deploy — AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are not set on this repo."
-            echo "Add them under Settings → Secrets and variables → Actions when you want CI to ship Lambda."
+            echo "Skipping Lambda deploy — AWS keys are not set."
+          elif [ "$ALLOW" != "yes" ]; then
+            echo "present=no" >> "$GITHUB_OUTPUT"
+            echo "Skipping Terraform apply — local state is the source of truth."
+            echo "Set secret ALLOW_TF_APPLY=yes only if a remote backend is configured."
           else
             echo "present=yes" >> "$GITHUB_OUTPUT"
           fi
