@@ -1,4 +1,6 @@
 .env
+.venv/
+build/
 *.zip
 lambda_deps/
 __pycache__/
@@ -9,6 +11,8 @@ terraform/.terraform/
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
 credentials.json
 *.egg-info/
 .DS_Store
+scripts/jarvis_preview.*
