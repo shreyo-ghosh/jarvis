@@ -1,169 +1,139 @@
-# Jarvis — Shreyo's 4-Agent Business Command System
-**AWS Lambda + DynamoDB + API Gateway · Groq Llama 3.3 70B + Gemini Flash · ~₹0/day**
+# Jarvis
+
+Personal companion on AWS Lambda. Talk on Telegram or in the Iron Man HUD.
+
+It answers general questions first — science, news, weather, coding, everyday things. LaunchLayer, Motilal, LinkedIn, and the desk come in only when you ask for them.
+
+**HUD:** https://shreyo-ghosh.github.io/jarvis/
 
 ```
-YOU (Telegram)
-     │
-     ▼
-🧠  ORCHESTRATOR  ←── daily brief, calendar, tasks, routing
-     │
-     ├─────────────────────┬──────────────────────┐
-     ▼                     ▼                      ▼
-📈 MARKET AGENT     📡 TECH AGENT         💰 FINANCE AGENT
-Nifty / Sensex      LaunchLayer content   @launchlayerfinance IG
-Stock analysis      @launchlayer IG       MO investor emails
-MF NAV / data       LinkedIn posts        WhatsApp broadcasts
-Watchlists          "Automation Edge"     AUM growth campaigns
-Macro news          Cold outreach email   Lead strategies
+Telegram  ──┐
+            ├──► API Gateway /webhook ──► Lambda (bot.py) ──► Orchestrator
+HUD / desk ─┘         CORS + DESK_TOKEN              │
+                                                     ├─ live search (weather, news, DDG)
+                                                     ├─ memory (Dynamo)
+                                                     └─ specialists only when the ask is theirs
+                                                          Market · Tech · Finance
 ```
+
+Groq chat (allowlist: `gpt-oss-20b` → `qwen3.8-27b` → `gpt-oss-120b`) · Whisper STT · Polly / browser TTS · ~₹0/day on the AWS free tier.
 
 ---
 
-## Agent Capabilities
+## Talk to it
 
-| Say this | Agent | Output |
-|---|---|---|
-| `What should I focus on today?` | Orchestrator | Prioritised daily brief from calendar + tasks + market |
-| `What's Nifty doing today?` | Market | Live index data via Gemini search |
-| `Add RELIANCE to my watchlist` | Market | Saved to DynamoDB, shows current data |
-| `Write this week's LaunchLayer newsletter` | Tech | Full "Automation Edge" newsletter draft |
-| `LinkedIn post about AI for CA firms` | Tech | Ready-to-post, 200 words, hashtags |
-| `Instagram post for @launchlayer about chatbots` | Tech | Caption + Canva visual brief |
-| `Post on @launchlayerfinance about SIP vs FD` | Finance | Caption + visual + MF disclaimer |
-| `WhatsApp messages for my MO leads` | Finance | 2 versions (beginner + FD holder) |
-| `Draft MO outreach email for salaried leads` | Finance | Full email draft via Gmail |
-| `Plan a campaign to grow AUM to ₹2L` | Finance | Week-by-week campaign plan |
-| `Log ₹8000 from LaunchLayer client ABC` | Orchestrator | Saved to DynamoDB |
-| `Show revenue summary` | Orchestrator | Totals by source, by month |
-| `What's on my calendar this week?` | Orchestrator | Google Calendar pull |
-| `Add meeting with Rahul tomorrow 3pm` | Orchestrator | Event created in Calendar |
+| Where | How |
+|---|---|
+| Public HUD | https://shreyo-ghosh.github.io/jarvis/ — Preferences → paste `DESK_TOKEN` from `.env` once |
+| This machine | `python3 scripts/hud.py` → http://127.0.0.1:8788/ — no token |
+| Telegram | Your bot, `ALLOWED_USER_ID` only — text or a voice note |
+
+On the HUD: click the core or press Space to talk (Chrome / Safari, HTTPS). Type if you prefer.
+
+### Anything
+
+`How does a rainbow form?` · `What's the weather in Kolkata right now?` · `What's the latest news I should know?`
+
+### Desk (only when you mean it)
+
+| Say this | What you get |
+|---|---|
+| `What should I focus on today?` | Calendar + tasks + market brief |
+| `What's Nifty doing today?` | Market agent |
+| `today's brief` / `linkedin calendar` | Daily LinkedIn review + 30-day plan |
+| `linkedin post about …` | Draft card — review on the phone, tap to queue |
+| `remind me in 20 minutes to call Rahul` | Reminder + activity |
+| `/leads` · `/activities` · `/reminders` | Desk lists |
+| `/remember …` · `/profile` | Standing notes |
+| `/voice on` | Spoken replies on Telegram |
 
 ---
 
 ## Architecture
 
-```
-Telegram → API Gateway (HTTPS) → Lambda (bot.py)
-                                       │
-                          ┌────────────┼────────────┐
-                          ▼            ▼             ▼
-                    agents/        tools/        AWS Services
-                orchestrator.py   search.py     DynamoDB
-                market_agent.py   gmail.py      SSM (secrets)
-                tech_agent.py     calendar.py   CloudWatch
-                finance_agent.py  instagram.py
-                                  tracker.py
-                                  dynamo.py
-```
-
-| Service | AWS Cost | Notes |
+| Service | Cost | Notes |
 |---|---|---|
-| Lambda | Free tier: 1M req/month | Runs per-message, not always-on |
-| API Gateway | Free tier: 1M req/month | HTTPS webhook endpoint |
-| DynamoDB | ~₹0 at this scale | On-demand billing |
-| SSM | Free (Standard tier) | Stores all secrets |
-| CloudWatch Logs | Free tier | 7-day retention |
-| **Groq AI** | Free: 14,400 req/day | Llama 3.3 70B — the AI brain |
-| **Gemini** | Free: 1,500 req/day | Web search grounding |
-| **Total** | **~₹0–5/day** | |
+| Lambda `shreyo-jarvis-bot` | Free tier | 120s / 1024 MB, ap-south-1 |
+| API Gateway | Free tier | `https://xmkwdl0d1d.execute-api.ap-south-1.amazonaws.com/webhook` |
+| DynamoDB `shreyo-agent-data` | ~₹0 | Memory, leads, drafts, reminders |
+| SSM `/shreyo-agent/*` | Free | Secrets, including `DESK_TOKEN` |
+| GitHub Pages | Free | Static HUD (`ui/`) |
+| Groq | Free tier | Chat + Whisper |
+| wttr.in / Google News RSS | Free | Live weather and headlines |
 
 ---
 
 ## Prerequisites
 
-Install once on your machine:
-- [AWS CLI](https://aws.amazon.com/cli/) → `aws configure` (region: `ap-south-1`)
-- [Terraform >= 1.6](https://developer.hashicorp.com/terraform/downloads)
-- [Docker](https://www.docker.com/) (for Lambda build)
-- [Python 3.12](https://www.python.org/downloads/)
-
-Get these keys (all free):
+- AWS CLI, credentials for account `197517025619` in `.env` (the default AWS profile on this machine may be stale)
+- Terraform ≥ 1.5
+- Python 3.12 (Docker optional; `build_lambda.sh` can use manylinux wheels)
 
 | Key | Where |
 |---|---|
-| `TELEGRAM_TOKEN` | @BotFather → `/newbot` |
-| `ALLOWED_USER_ID` | @userinfobot on Telegram |
-| `GROQ_API_KEY` | console.groq.com (no card) |
+| `TELEGRAM_TOKEN` | @BotFather |
+| `ALLOWED_USER_ID` | @userinfobot |
+| `GROQ_API_KEY` | console.groq.com |
 | `GEMINI_API_KEY` | aistudio.google.com/apikey |
+| `DESK_TOKEN` | Long random string — HUD Preferences and SSM |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM user `shreyo-cli`, region `ap-south-1` |
 
 ---
 
-## Deploy
+## Deploy (from this machine)
 
 ```bash
-# 1. Clone your repo
 git clone https://github.com/shreyo-ghosh/jarvis.git
 cd jarvis
-
-# 2. Fill in secrets
-cp .env.example .env
-nano .env   # paste your keys
-
-# 3. One command — builds Lambda zip, applies Terraform, registers webhook
+cp .env.example .env   # fill keys; leave DESK_TOKEN blank to auto-generate
 chmod +x scripts/*.sh
 ./scripts/deploy.sh
 ```
 
-Done. Message your bot `/start`.
+That builds `lambda_package.zip`, applies Terraform (CORS, OPTIONS, EventBridge tick), pushes `DESK_TOKEN` to SSM, and registers the Telegram webhook.
+
+Then open the HUD → Preferences → paste `DESK_TOKEN` from `.env`.
+
+Re-run `./scripts/deploy.sh` after code changes. Terraform state lives **here**, not on GitHub Actions.
+
+### GitHub Pages
+
+Pushes to `ui/` publish https://shreyo-ghosh.github.io/jarvis/ via `.github/workflows/pages.yml`.
+
+The **Deploy Jarvis** workflow does **not** apply Terraform unless secret `ALLOW_TF_APPLY=yes` and a remote backend exist. Local apply is the source of truth.
 
 ---
 
-## Update After Code Changes
+## Local HUD
 
 ```bash
-./scripts/build_lambda.sh
-cd terraform && terraform apply -auto-approve \
-  -var="telegram_token=$TELEGRAM_TOKEN" \
-  -var="allowed_user_id=$ALLOWED_USER_ID" \
-  -var="groq_api_key=$GROQ_API_KEY" \
-  -var="gemini_api_key=$GEMINI_API_KEY"
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python scripts/hud.py
+# http://127.0.0.1:8788/
 ```
 
-Or just re-run `./scripts/deploy.sh` — it's idempotent.
+Corporate SSL MITM: Groq and search retry without verify after certifi fails.
+
+```bash
+.venv/bin/python scripts/local_voice_test.py
+```
 
 ---
 
-## Step 5 (Optional) — Gmail + Google Calendar
+## Optional
+
+**Gmail + Calendar**
 
 ```bash
 pip install google-auth-oauthlib
 python scripts/setup_google_auth.py
+./scripts/deploy.sh
 ```
 
-Follow the browser flow → logs in with your Google account → appends `GMAIL_TOKEN_JSON` to `.env`.
-Re-run `./scripts/deploy.sh` — it pushes the token to SSM automatically.
+**LinkedIn queue** — `PUBLORA_API_KEY` + `LINKEDIN_PLATFORM_ID` in `.env`, then deploy. Approve cards on Telegram; no laptop paste.
 
-Google Cloud setup (one-time):
-1. console.cloud.google.com → New Project → "JarvisAgent"
-2. Enable: Gmail API + Google Calendar API
-3. OAuth consent screen → External → add your Gmail as test user
-4. Credentials → OAuth 2.0 Client ID → Desktop → download as `credentials.json`
-
----
-
-## Instagram Auto-Posting (Optional)
-
-Both Instagram accounts must be Professional and linked to Facebook Pages.
-1. Create Facebook App at developers.facebook.com
-2. Get Instagram Graph API long-lived token
-3. Find your Instagram Business Account IDs
-4. Add to `.env`:
-   ```
-   INSTAGRAM_ACCESS_TOKEN=...
-   LAUNCHLAYER_IG_ACCOUNT_ID=...
-   LAUNCHLAYER_FINANCE_IG_ACCOUNT_ID=...
-   ```
-5. Re-run `./scripts/deploy.sh`
-
-Until configured, the bot generates captions + Canva briefs for manual posting.
-
----
-
-## Teardown
-
-```bash
-cd terraform && terraform destroy
-```
+**Instagram** — Professional accounts + Graph token in `.env`. Until then, captions and Canva briefs only.
 
 ---
 
@@ -171,44 +141,43 @@ cd terraform && terraform destroy
 
 | Symptom | Fix |
 |---|---|
-| Bot silent | Check CloudWatch: `/aws/lambda/shreyo-jarvis-bot` |
-| "Unauthorized" | Wrong ALLOWED_USER_ID — check @userinfobot |
-| Webhook not firing | Re-run `./scripts/set_webhook.sh` |
-| Terraform IAM error | Ensure AWS user has `IAMFullAccess` |
-| Gmail/Calendar errors | Re-run `scripts/setup_google_auth.py` |
-| Lambda timeout | Agent taking >60s — check Groq quota |
+| HUD line **Down** | Lambda not deployed, or CORS missing — `./scripts/deploy.sh` |
+| `Desk token rejected` | Preferences token ≠ SSM `/shreyo-agent/DESK_TOKEN` |
+| GitHub Actions AWS error | Keys belong in `.env` and repo secrets; CI will not terraform-apply by default |
+| `InvalidClientTokenId` | Source `.env` — do not rely on the default AWS profile |
+| Bot silent | CloudWatch `/aws/lambda/shreyo-jarvis-bot` |
+| Unauthorized on Telegram | Wrong `ALLOWED_USER_ID` |
+| Webhook dead | `bash scripts/set_webhook.sh` |
+| Answers drag in LaunchLayer | Ask a general question; work profile is injected only on work hints |
 
 ---
 
-## File Structure
+## Layout
 
 ```
 jarvis/
+├── ui/                         # GitHub Pages HUD
+│   ├── index.html
+│   ├── hud.css
+│   └── hud.js
 ├── src/
-│   ├── bot.py                     # Lambda handler — Telegram webhook entry point
+│   ├── bot.py                  # Lambda: Telegram + desk_chat + CORS
 │   ├── agents/
-│   │   ├── orchestrator.py        # 🧠 Routes + daily briefs + tracker/calendar
-│   │   ├── market_agent.py        # 📈 Indian market intelligence
-│   │   ├── tech_agent.py          # 📡 LaunchLayer content + outreach
-│   │   └── finance_agent.py       # 💰 MO outreach + @launchlayerfinance
-│   └── tools/
-│       ├── search.py              # Gemini search + DDG fallback
-│       ├── gmail.py               # Gmail draft/send/inbox (SSM-backed)
-│       ├── calendar_tool.py       # Google Calendar (SSM-backed)
-│       ├── instagram.py           # IG captions + Graph API auto-post
-│       ├── tracker.py             # Revenue + task tracker (DynamoDB)
-│       └── dynamo.py              # DynamoDB key-value store
-├── terraform/
-│   ├── main.tf                    # Lambda, API GW, DynamoDB, IAM, SSM, CloudWatch
-│   ├── variables.tf
-│   └── outputs.tf
+│   │   ├── orchestrator.py     # General chat, routing, desk, brief
+│   │   ├── market_agent.py
+│   │   ├── tech_agent.py
+│   │   └── finance_agent.py
+│   └── tools/                  # search, memory, LinkedIn, reminders, STT/TTS…
 ├── scripts/
-│   ├── deploy.sh                  # One-shot: build + terraform + webhook
-│   ├── build_lambda.sh            # Docker build for Linux-compatible deps
-│   ├── set_webhook.sh             # Register/update Telegram webhook
-│   └── setup_google_auth.py      # One-time Google OAuth flow
-├── requirements.txt
-├── .env.example
-├── .gitignore
-└── README.md
+│   ├── deploy.sh
+│   ├── build_lambda.sh
+│   ├── hud.py                  # Local HUD server
+│   ├── push_secrets.sh
+│   └── set_webhook.sh
+├── terraform/
+├── tests/
+├── .github/workflows/
+│   ├── pages.yml               # Publishes ui/
+│   └── deploy.yml              # Lambda only if ALLOW_TF_APPLY=yes
+└── .env.example
 ```
