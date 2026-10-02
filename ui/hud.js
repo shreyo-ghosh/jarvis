@@ -458,11 +458,18 @@ document.getElementById("cfg-save").addEventListener("click", (e) => {
 dChannel.textContent = cfg.endpoint === "/api/chat" ? "This machine" : "The live house";
 
 function pingLine() {
-  fetch(cfg.endpoint, { method: "OPTIONS" })
+  fetch(cfg.endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event: "desk_chat", text: "ping" }),
+  })
     .then((res) => {
-      if (!res.ok && res.status !== 204) throw new Error(String(res.status));
-      dLink.textContent = "Connected";
-      sysDot.className = "dot live";
+      if (res.ok || res.status === 401) {
+        dLink.textContent = "Connected";
+        sysDot.className = "dot live";
+        return;
+      }
+      throw new Error(String(res.status));
     })
     .catch(() => {
       dLink.textContent = "Down";
