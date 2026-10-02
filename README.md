@@ -94,13 +94,20 @@ That builds `lambda_package.zip`, applies Terraform (CORS, OPTIONS, EventBridge 
 
 Then open the HUD → Preferences → paste `DESK_TOKEN` from `.env`.
 
-Re-run `./scripts/deploy.sh` after code changes. Terraform state lives **here**, not on GitHub Actions.
+Re-run `./scripts/deploy.sh` after code changes, or push to `main` — **Deploy Jarvis** applies the same state.
+
+Terraform state is in S3 (`shreyo-jarvis-tfstate-197517025619` / `jarvis/terraform.tfstate`) with a Dynamo lock (`shreyo-jarvis-tf-lock`). First-time box:
+
+```bash
+./scripts/bootstrap_tf_backend.sh
+cd terraform && terraform init
+```
 
 ### GitHub Pages
 
 Pushes to `ui/` publish https://shreyo-ghosh.github.io/jarvis/ via `.github/workflows/pages.yml`.
 
-The **Deploy Jarvis** workflow does **not** apply Terraform unless secret `ALLOW_TF_APPLY=yes` and a remote backend exist. Local apply is the source of truth.
+Pushes to `src/`, `terraform/`, or `scripts/` run **Deploy Jarvis** (Lambda zip + `terraform apply` against the remote state).
 
 ---
 

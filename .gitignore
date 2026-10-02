@@ -10,6 +10,7 @@ __pycache__/
 terraform/.terraform/
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
+terraform/terraform.tfstate.*
 terraform/.terraform.lock.hcl
 terraform/terraform.tfvars
 credentials.json

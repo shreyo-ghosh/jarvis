@@ -5,7 +5,15 @@ terraform {
       version = "~> 5.0"
     }
   }
-  required_version = ">= 1.6"
+  required_version = ">= 1.5"
+
+  backend "s3" {
+    bucket         = "shreyo-jarvis-tfstate-197517025619"
+    key            = "jarvis/terraform.tfstate"
+    region         = "ap-south-1"
+    dynamodb_table = "shreyo-jarvis-tf-lock"
+    encrypt        = true
+  }
 }
 
 provider "aws" {
@@ -28,27 +36,31 @@ resource "aws_dynamodb_table" "agent_data" {
 
 # ── SSM Parameters (secrets) ──────────────────────────────────────────────────
 resource "aws_ssm_parameter" "telegram_token" {
-  name  = "/shreyo-agent/TELEGRAM_TOKEN"
-  type  = "SecureString"
-  value = var.telegram_token
+  name      = "/shreyo-agent/TELEGRAM_TOKEN"
+  type      = "SecureString"
+  value     = var.telegram_token
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "allowed_user_id" {
-  name  = "/shreyo-agent/ALLOWED_USER_ID"
-  type  = "SecureString"
-  value = var.allowed_user_id
+  name      = "/shreyo-agent/ALLOWED_USER_ID"
+  type      = "SecureString"
+  value     = var.allowed_user_id
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "groq_api_key" {
-  name  = "/shreyo-agent/GROQ_API_KEY"
-  type  = "SecureString"
-  value = var.groq_api_key
+  name      = "/shreyo-agent/GROQ_API_KEY"
+  type      = "SecureString"
+  value     = var.groq_api_key
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "gemini_api_key" {
-  name  = "/shreyo-agent/GEMINI_API_KEY"
-  type  = "SecureString"
-  value = var.gemini_api_key
+  name      = "/shreyo-agent/GEMINI_API_KEY"
+  type      = "SecureString"
+  value     = var.gemini_api_key
+  overwrite = true
 }
 
 # ── IAM Role for Lambda ───────────────────────────────────────────────────────
@@ -90,6 +102,12 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Effect   = "Allow"
         Action   = ["ssm:GetParameter", "ssm:GetParameters"]
         Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/shreyo-agent/*"
+      },
+      {
+        # Polly — British neural/standard voice for spoken replies
+        Effect   = "Allow"
+        Action   = ["polly:SynthesizeSpeech"]
+        Resource = "*"
       }
     ]
   })
@@ -108,13 +126,15 @@ resource "aws_lambda_function" "jarvis_bot" {
   runtime          = "python3.12"
   filename         = "../lambda_package.zip"
   source_code_hash = filebase64sha256("../lambda_package.zip")
-  timeout          = 60   # 60s — agent loops can take time
-  memory_size      = 512
+  timeout          = 120  # STT + multi-agent + TTS
+  memory_size      = 1024
 
   environment {
     variables = {
-      AWS_REGION_NAME  = var.aws_region
-      DYNAMO_TABLE     = aws_dynamodb_table.agent_data.name
+      AWS_REGION_NAME      = var.aws_region
+      DYNAMO_TABLE         = aws_dynamodb_table.agent_data.name
+      JARVIS_VOICE         = "Charon"
+      JARVIS_TTS_PROVIDER  = "auto"
       # Secrets are pulled from SSM at runtime — not stored in env vars
     }
   }
@@ -136,6 +156,32 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 resource "aws_apigatewayv2_api" "telegram_webhook" {
   name          = "shreyo-jarvis-webhook"
   protocol_type = "HTTP"
+
+  cors_configuration {
+    allow_origins = ["*"]
+    allow_methods = ["GET", "POST", "OPTIONS"]
+    allow_headers = ["content-type", "authorization", "x-desk-token"]
+    max_age       = 86400
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "jarvis_tick" {
+  name                = "shreyo-jarvis-reminder-tick"
+  schedule_expression = "rate(5 minutes)"
+}
+
+resource "aws_cloudwatch_event_target" "jarvis_tick" {
+  rule      = aws_cloudwatch_event_rule.jarvis_tick.name
+  target_id = "jarvis"
+  arn       = aws_lambda_function.jarvis_bot.arn
+}
+
+resource "aws_lambda_permission" "events_tick" {
+  statement_id  = "AllowEventBridgeTick"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.jarvis_bot.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.jarvis_tick.arn
 }
 
 resource "aws_apigatewayv2_integration" "lambda_integration" {
@@ -148,6 +194,12 @@ resource "aws_apigatewayv2_integration" "lambda_integration" {
 resource "aws_apigatewayv2_route" "webhook_route" {
   api_id    = aws_apigatewayv2_api.telegram_webhook.id
   route_key = "POST /webhook"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+}
+
+resource "aws_apigatewayv2_route" "options_webhook" {
+  api_id    = aws_apigatewayv2_api.telegram_webhook.id
+  route_key = "OPTIONS /webhook"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 }
 
