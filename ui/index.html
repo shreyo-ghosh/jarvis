@@ -1,126 +1,68 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>J.A.R.V.I.S.</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=Great+Vibes&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="hud.css?v=3" />
-</head>
-<body class="theme-jarvis">
-  <div class="hex"></div>
-  <div class="floor"></div>
-  <div class="bloom"></div>
-  <div class="frame tl"></div>
-  <div class="frame tr"></div>
-  <div class="frame bl"></div>
-  <div class="frame br"></div>
-
-  <header class="top">
-    <div class="brand">
-      <span class="mark" id="mark">J.A.R.V.I.S.</span>
-      <span class="sub" id="sub">Just A Rather Very Intelligent System</span>
-    </div>
-    <div class="mode" role="tablist">
-      <button type="button" id="mode-jarvis" class="on">J.A.R.V.I.S.</button>
-      <button type="button" id="mode-friday">F.R.I.D.A.Y.</button>
-    </div>
-    <div class="clocks">
-      <div><span class="k">IST</span><span id="clock-ist">--:--:--</span></div>
-      <div><span class="k">UTC</span><span id="clock-utc">--:--:--</span></div>
-    </div>
-    <div class="sys">
-      <span class="dot" id="sys-dot"></span>
-      <span id="sys-label">At ease</span>
-      <button type="button" id="btn-settings" class="ghost">Preferences</button>
-    </div>
-  </header>
-
-  <main class="stage">
-    <aside class="rail left holo">
-      <h2>The house</h2>
-      <dl>
-        <div><dt>Where</dt><dd id="d-channel">This machine</dd></div>
-        <div><dt>Voice</dt><dd id="d-voice">Quiet</dd></div>
-        <div><dt>Line</dt><dd id="d-link">Checking</dd></div>
-      </dl>
-      <h2>Shall I</h2>
-        <div class="chips" id="quick">
-          <button data-cmd="What's the latest news I should know?">The news</button>
-          <button data-cmd="What's the weather in Kolkata right now?">Weather in Kolkata</button>
-          <button data-cmd="today's brief">This morning's brief</button>
-          <button data-cmd="linkedin calendar">The calendar</button>
-          <button data-cmd="What should I focus on today?">What needs you today</button>
-        </div>
-      <p class="hint">Click the core or press <kbd>Space</kbd> to talk. I listen, I answer. Type if you prefer.</p>
-    </aside>
-
-    <section class="core-wrap">
-      <div class="rings" id="reactor">
-        <svg class="orb" viewBox="0 0 400 400" aria-hidden="true">
-          <defs>
-            <radialGradient id="coreg" cx="40%" cy="35%">
-              <stop offset="0%" stop-color="#ffffff" />
-              <stop offset="35%" stop-color="#b8f7ff" />
-              <stop offset="100%" stop-color="#043a4c" />
-            </radialGradient>
-          </defs>
-          <circle class="track" cx="200" cy="200" r="188" />
-          <circle class="track dash spin-slow" cx="200" cy="200" r="168" />
-          <circle class="track thin spin-rev" cx="200" cy="200" r="148" />
-          <circle class="track" cx="200" cy="200" r="118" />
-          <g class="spin-slow ticks-svg">
-            <g id="tick">
-              <line x1="200" y1="22" x2="200" y2="38" />
-            </g>
-          </g>
-        </svg>
-        <button type="button" id="mic" class="core" aria-label="Speak">
-          <span class="iris"></span>
-        </button>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jarvis Growth OS</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Jarvis Growth OS</h1>
+        <p>LaunchLayer content, approvals, and growth operations</p>
       </div>
-      <p class="verb" id="verb">Ready when you are, sir</p>
-    </section>
+      <div class="status-pill" id="api-status">Checking API</div>
+    </header>
 
-    <aside class="rail right holo">
-      <h2>Conversation</h2>
-      <div class="log" id="log"></div>
-    </aside>
-  </main>
+    <main>
+      <section class="grid">
+        <article class="card">
+          <h2>Content pipeline</h2>
+          <div class="stats">
+            <div><span id="stat-draft">0</span><label>Draft</label></div>
+            <div><span id="stat-pending">0</span><label>Awaiting approval</label></div>
+            <div><span id="stat-approved">0</span><label>Approved</label></div>
+            <div><span id="stat-scheduled">0</span><label>Scheduled</label></div>
+          </div>
+        </article>
 
-  <footer class="bar holo">
-    <form id="form" autocomplete="off">
-      <label class="prompt" for="line">Sir</label>
-      <input id="line" name="line" type="text" placeholder="What can I do for you?" autofocus />
-      <button type="submit" class="go">Send</button>
-    </form>
-  </footer>
+        <article class="card">
+          <h2>Create content</h2>
+          <form id="content-form">
+            <label>Campaign ID<input name="campaign_id" placeholder="camp_xxx" required /></label>
+            <label>Channel
+              <select name="channel">
+                <option value="instagram">Instagram</option>
+                <option value="linkedin">LinkedIn</option>
+                <option value="newsletter">Newsletter</option>
+                <option value="whatsapp">WhatsApp</option>
+              </select>
+            </label>
+            <label>Type
+              <select name="content_type">
+                <option value="post">Post</option>
+                <option value="carousel">Carousel</option>
+                <option value="reel">Reel</option>
+                <option value="newsletter">Newsletter</option>
+              </select>
+            </label>
+            <label>Title<input name="title" required /></label>
+            <label>Body<textarea name="body" rows="5" required></textarea></label>
+            <button type="submit">Create draft</button>
+          </form>
+        </article>
+      </section>
 
-  <dialog id="settings">
-    <form method="dialog" class="sheet">
-      <h2>Preferences</h2>
-      <label>Endpoint
-        <input id="cfg-endpoint" type="text" placeholder="/api/chat" />
-      </label>
-      <label>Desk token
-        <input id="cfg-token" type="password" placeholder="Needed on the public site" />
-      </label>
-      <p class="fine">On this machine, leave /api/chat. Online, the live house URL is already set — paste the desk token once; it stays in this browser.</p>
-      <menu>
-        <button value="cancel" class="ghost">Close</button>
-        <button id="cfg-save" value="default" class="go">Save</button>
-      </menu>
-    </form>
-  </dialog>
+      <section class="card">
+        <div class="section-header">
+          <h2>Approval queue</h2>
+          <button id="refresh">Refresh</button>
+        </div>
+        <div id="content-list" class="content-list">Loading…</div>
+      </section>
+    </main>
 
-  <div id="boot" class="boot">
-    <div class="boot-ring"></div>
-    <p class="mark" id="boot-mark">J.A.R.V.I.S.</p>
-    <p id="boot-line">Initialising, sir</p>
-  </div>
-
-  <script src="hud.js?v=3"></script>
-</body>
+    <script src="./app.js"></script>
+  </body>
 </html>
